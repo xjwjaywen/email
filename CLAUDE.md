@@ -77,6 +77,26 @@ rebase 发生冲突时：
 
 **同样的问题不要犯两次！**
 
+## 项目架构
+
+- **项目类型**：邮件检索问答系统 (RAG)
+- **前端**：React + TypeScript + Tailwind CSS (frontend/)
+- **后端**：Python + FastAPI (backend/)
+- **向量数据库**：ChromaDB
+- **元数据存储**：SQLite
+- **LLM/Embedding**：OpenAI API
+
+### 关键路径
+
+- 后端入口：`backend/app/main.py`
+- 假数据生成：`backend/seed_data.py`
+- 前端入口：`frontend/src/App.tsx`
+
+### 测试命令
+
+- 后端：`cd backend && pytest tests/ -v`
+- 前端：`cd frontend && npm test`
+
 ## 注意事项
 
 - 在 worktree 中工作时，不要切换到其他分支
