@@ -51,43 +51,43 @@ def _extract_keywords(query: str) -> list[str]:
 
 
 def _keyword_search(keywords: list[str], top_k: int) -> list[dict]:
-    """使用 ChromaDB 的 where_document 进行关键词匹配。"""
+    """使用 ChromaDB 的 where_document 逐个关键词匹配，合并去重。"""
     collection = get_collection()
     if collection.count() == 0 or not keywords:
         return []
 
-    # 用 $or + $contains 做多关键词搜索
-    where_conditions = [{"$contains": kw} for kw in keywords[:5]]
+    seen_ids = set()
+    sources = []
 
-    try:
-        if len(where_conditions) == 1:
-            where_doc = where_conditions[0]
-        else:
-            where_doc = {"$or": where_conditions}
+    # 逐个关键词搜索（ChromaDB where_document 不支持 $or）
+    for kw in keywords[:8]:
+        try:
+            results = collection.get(
+                where_document={"$contains": kw},
+                include=["documents", "metadatas"],
+                limit=top_k,
+            )
+            for i in range(len(results["ids"])):
+                eid = results["ids"][i]
+                if eid in seen_ids:
+                    continue
+                seen_ids.add(eid)
+                metadata = results["metadatas"][i]
+                sources.append({
+                    "email_id": metadata["email_id"],
+                    "subject": metadata["subject"],
+                    "from_name": metadata["from_name"],
+                    "from_email": metadata["from_email"],
+                    "date": metadata["date"],
+                    "tags": metadata.get("tags", ""),
+                    "attachments": metadata.get("attachments", ""),
+                    "document": results["documents"][i],
+                    "distance": 0.5,
+                })
+        except Exception:
+            continue
 
-        results = collection.get(
-            where_document=where_doc,
-            include=["documents", "metadatas"],
-            limit=top_k,
-        )
-
-        sources = []
-        for i in range(len(results["ids"])):
-            metadata = results["metadatas"][i]
-            sources.append({
-                "email_id": metadata["email_id"],
-                "subject": metadata["subject"],
-                "from_name": metadata["from_name"],
-                "from_email": metadata["from_email"],
-                "date": metadata["date"],
-                "tags": metadata.get("tags", ""),
-                "attachments": metadata.get("attachments", ""),
-                "document": results["documents"][i],
-                "distance": 0.5,  # 关键词匹配给一个中等距离
-            })
-        return sources
-    except Exception:
-        return []
+    return sources[:top_k]
 
 
 def _semantic_search(query: str, top_k: int) -> list[dict]:
