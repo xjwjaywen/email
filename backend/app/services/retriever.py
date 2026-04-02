@@ -28,6 +28,17 @@ def _extract_keywords(query: str) -> list[str]:
             w = w.strip()
             if len(w) >= 2:
                 keywords.append(w)
+            elif len(w) == 1 and w.isascii() and w.isalpha():
+                continue  # 单个字母跳过
+
+    # 拆分中英文混合词（如"CPI预测"→"CPI"+"预测"，"GDP增速"→"GDP"+"增速"）
+    split_keywords = []
+    for kw in keywords:
+        parts = re.split(r'(?<=[a-zA-Z0-9])(?=[\u4e00-\u9fff])|(?<=[\u4e00-\u9fff])(?=[a-zA-Z0-9])', kw)
+        if len(parts) > 1:
+            split_keywords.extend(p for p in parts if len(p) >= 2)
+        split_keywords.append(kw)
+    keywords = split_keywords
 
     # 对长关键词做滑动窗口切分（2-4字符），提升中文匹配率
     extra = []
@@ -51,43 +62,48 @@ def _extract_keywords(query: str) -> list[str]:
 
 
 def _keyword_search(keywords: list[str], top_k: int) -> list[dict]:
-    """使用 ChromaDB 的 where_document 逐个关键词匹配，合并去重。"""
+    """使用 ChromaDB 的 where_document 逐个关键词匹配，按命中次数排序。"""
     collection = get_collection()
     if collection.count() == 0 or not keywords:
         return []
 
-    seen_ids = set()
-    sources = []
+    # 收集每个文档的加权命中分数
+    hit_score: dict[str, float] = {}
+    doc_data: dict[str, dict] = {}
 
-    # 逐个关键词搜索（ChromaDB where_document 不支持 $or）
-    for kw in keywords[:8]:
+    # 原始关键词权重=3，子片段权重=1
+    original_kws = set(keywords[:5])
+
+    for kw in keywords[:12]:
+        weight = 3.0 if kw in original_kws else 1.0
         try:
             results = collection.get(
                 where_document={"$contains": kw},
                 include=["documents", "metadatas"],
-                limit=top_k,
+                limit=10,
             )
             for i in range(len(results["ids"])):
                 eid = results["ids"][i]
-                if eid in seen_ids:
-                    continue
-                seen_ids.add(eid)
-                metadata = results["metadatas"][i]
-                sources.append({
-                    "email_id": metadata["email_id"],
-                    "subject": metadata["subject"],
-                    "from_name": metadata["from_name"],
-                    "from_email": metadata["from_email"],
-                    "date": metadata["date"],
-                    "tags": metadata.get("tags", ""),
-                    "attachments": metadata.get("attachments", ""),
-                    "document": results["documents"][i],
-                    "distance": 0.5,
-                })
+                hit_score[eid] = hit_score.get(eid, 0) + weight
+                if eid not in doc_data:
+                    metadata = results["metadatas"][i]
+                    doc_data[eid] = {
+                        "email_id": metadata["email_id"],
+                        "subject": metadata["subject"],
+                        "from_name": metadata["from_name"],
+                        "from_email": metadata["from_email"],
+                        "date": metadata["date"],
+                        "tags": metadata.get("tags", ""),
+                        "attachments": metadata.get("attachments", ""),
+                        "document": results["documents"][i],
+                        "distance": 0.5,
+                    }
         except Exception:
             continue
 
-    return sources[:top_k]
+    # 按加权命中分数降序排列
+    sorted_ids = sorted(hit_score.keys(), key=lambda eid: hit_score[eid], reverse=True)
+    return [doc_data[eid] for eid in sorted_ids[:top_k]]
 
 
 def _semantic_search(query: str, top_k: int) -> list[dict]:
