@@ -15,7 +15,7 @@ CHROMA_DIR = DATA_DIR / "chroma"
 # MiniMax API 配置
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
 MINIMAX_BASE_URL = "https://api.minimax.chat/v1"
-MINIMAX_CHAT_MODEL = "abab6.5s-chat"
+MINIMAX_CHAT_MODEL = "MiniMax-M2.7"
 
 # OpenAI API 配置（备用）
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
