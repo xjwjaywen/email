@@ -55,15 +55,9 @@ export function useChat() {
       try {
         const res = await api.sendMessage(activeId, content);
         setMessages((prev) => [...prev, res.user_message, res.assistant_message]);
-        // Update conversation list order
-        setConversations((prev) => {
-          const idx = prev.findIndex((c) => c.id === activeId);
-          if (idx <= 0) return prev;
-          const updated = [...prev];
-          const [conv] = updated.splice(idx, 1);
-          updated.unshift(conv);
-          return updated;
-        });
+        // Reload conversation list to pick up auto-generated title
+        const updatedList = await api.listConversations();
+        setConversations(updatedList);
       } finally {
         setLoading(false);
       }

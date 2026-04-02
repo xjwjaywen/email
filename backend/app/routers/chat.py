@@ -8,10 +8,60 @@ from fastapi import APIRouter, HTTPException
 
 from app.database import get_db
 from app.models.conversation import ChatResponse, MessageCreate, MessageOut
-from app.services.llm import generate_answer
+from app.services.llm import generate_answer, get_llm_client, get_chat_model
 from app.services.memory import extract_memory_from_conversation, get_memory_context
 
 router = APIRouter(prefix="/api/conversations", tags=["chat"])
+
+
+async def auto_title(conv_id: str, user_message: str):
+    """首次对话时自动生成对话标题。"""
+    db = await get_db()
+    try:
+        # 检查是否是首条消息（只有刚插入的 user 消息）
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM messages WHERE conversation_id = ? AND role = 'user'",
+            (conv_id,),
+        )
+        count = (await cursor.fetchone())[0]
+        if count != 1:
+            return
+
+        # 检查标题是否还是默认的
+        cursor = await db.execute(
+            "SELECT title FROM conversations WHERE id = ?", (conv_id,)
+        )
+        row = await cursor.fetchone()
+        if not row or row[0] != "New Conversation":
+            return
+
+        # 用 LLM 生成短标题
+        try:
+            client = get_llm_client()
+            model = get_chat_model()
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "根据用户的提问，生成一个简短的对话标题（不超过15个字，不要加引号和标点）。"},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.3,
+            )
+            title = (resp.choices[0].message.content or "").strip().strip('"\'""''')
+            # 清理 <think> 标签
+            import re
+            title = re.sub(r"<think>[\s\S]*?</think>\s*", "", title).strip()
+            if title and len(title) <= 50:
+                now = datetime.now(timezone.utc).isoformat()
+                await db.execute(
+                    "UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?",
+                    (title, now, conv_id),
+                )
+                await db.commit()
+        except Exception:
+            pass
+    finally:
+        await db.close()
 
 
 @router.post("/{conv_id}/messages", response_model=ChatResponse)
@@ -34,6 +84,7 @@ async def send_message(conv_id: str, data: MessageCreate):
             "VALUES (?, ?, 'user', ?, NULL, ?)",
             (user_msg_id, conv_id, data.content, now),
         )
+        await db.commit()
 
         # 获取对话历史
         cursor = await db.execute(
@@ -69,7 +120,11 @@ async def send_message(conv_id: str, data: MessageCreate):
         )
         await db.commit()
 
-        # 异步提取 memory（不阻塞响应）
+        # 自动生成标题 + 提取 memory（不阻塞响应）
+        try:
+            await auto_title(conv_id, data.content)
+        except Exception:
+            pass
         try:
             await extract_memory_from_conversation(conv_id, data.content, answer)
         except Exception:
