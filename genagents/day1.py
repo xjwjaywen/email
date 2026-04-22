@@ -20,7 +20,7 @@ from openai import AsyncOpenAI
 
 
 MODEL = "MiniMax-M2"
-BASE_URL = "https://api.minimax.io/v1"
+BASE_URL = "https://api.minimaxi.com/v1"   # 国内站; 国际站用 https://api.minimax.io/v1
 
 client = AsyncOpenAI(
     api_key=os.environ.get("MINIMAX_API_KEY", ""),
