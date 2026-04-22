@@ -325,7 +325,10 @@ async def generate_plan(agent: Agent, date_str: str) -> list[PlanItem]:
 # ============ conversation ============
 
 async def agent_speak(speaker: Agent, listener: Agent, scene: str,
-                      now: datetime) -> str:
+                      now: datetime,
+                      dialogue_so_far: list[tuple[str, str]] | None = None) -> str:
+    """dialogue_so_far: list of (speaker_name, utterance) for THIS conversation
+    so far — the in-turn history that prevents "starting over" each round."""
     query = f"{scene} 和 {listener.name} 的对话"
     retrieved = speaker.retrieve_as_prompt(query, k=6)
 
@@ -337,15 +340,26 @@ async def agent_speak(speaker: Agent, listener: Agent, scene: str,
     else:
         vday_hint = f"今天是 {now.date()},情人节(02-14)已过 {-days_to_vday} 天。"
 
+    # Render turn-by-turn history of THIS conversation
+    if dialogue_so_far:
+        hist_lines = [f"{name}: {utt}" for name, utt in dialogue_so_far]
+        hist_block = "\n".join(hist_lines)
+        dialog_note = (
+            f"\n【当前这次对话刚才说过的(按顺序)】\n{hist_block}\n"
+            f"(不要重新打招呼、不要重新邀请、不要当成刚相遇 — 在这个对话上下文里接下去说)"
+        )
+    else:
+        dialog_note = "\n(这是你们本次对话的开场第一句)"
+
     prompt = f"""你是 {speaker.name}。
 【人格】{speaker.identity}
 【时间锚点】{vday_hint}
 
-【你检索到的相关记忆(💭 = 反思判断, · = 具体观察)】
+【你检索到的相关长期记忆(💭 = 反思判断, · = 具体观察)】
 {retrieved}
 
 【当前场景】{scene}
-你正在和 {listener.name} 说话。
+你正在和 {listener.name} 说话。{dialog_note}
 
 请用一句自然、符合人格的话回应(≤40字)。如果提到日期/时间,必须基于上面【时间锚点】。
 直接输出一句话,不要任何前缀、引号、叙事描写、XML 标签。"""
@@ -354,10 +368,15 @@ async def agent_speak(speaker: Agent, listener: Agent, scene: str,
 
 async def short_conversation(a: Agent, b: Agent, scene: str, rounds: int,
                              now: datetime):
+    dialogue_so_far: list[tuple[str, str]] = []
     speaker, listener = a, b
     for _ in range(rounds):
-        utt = await agent_speak(speaker, listener, scene, now)
+        utt = await agent_speak(speaker, listener, scene, now,
+                                dialogue_so_far=dialogue_so_far)
         print(f"     [{speaker.name}] {utt}")
+
+        # record in THIS conversation's running transcript
+        dialogue_so_far.append((speaker.name, utt))
 
         shared_score = await score_importance(f"对话内容: {utt}")
         await speaker.remember(
