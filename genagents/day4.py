@@ -131,12 +131,13 @@ REFLECTION_PROMPT = """基于 {agent_name} 最近经历的重要观察,请总结
           "Maria 喜欢安静"(如已有 "Maria 偏好独处" 就是同义改写);
           "Klaus 上周点了拿铁"(琐事)
 
-输出格式(必须严格):
-1. <judgment>
-2. <judgment>
-3. <judgment>
+输出格式 — 每行形如 "N. 你的判断内容"(禁止使用任何 <> 括号或 XML 标签):
+示例(照这种形式,不要照搬内容):
+1. Maria 对热闹社交回避
+2. 我追问 party 让 Maria 有压力
+3. Maria 虽然嘴上说"有空再来",其实对邀请心动
 
-只输出 {n} 条编号条目,不要其他解释或前缀。"""
+现在请输出 {n} 条 {agent_name} 自己的新判断,每条独立一行,带编号,**不要 <> 标签,不要前缀,不要解释**。"""
 
 
 PLAN_PROMPT = """你是 {agent_name}。
@@ -237,10 +238,18 @@ class Agent:
 
         raw = await _llm_call(prompt, temperature=0.3)
         reflections = re.findall(r"\d+[\.\)]\s*(.+)", raw)
-        reflections = [r.strip() for r in reflections if r.strip()]
-        reflections = reflections[:N_REFLECTIONS_PER_CYCLE]
+        cleaned = []
+        for r in reflections:
+            # strip <...> tags if LLM put them in despite instructions
+            r = re.sub(r"</?[^>]+>", "", r).strip()
+            # drop empty / placeholder outputs
+            if len(r) < 8:
+                continue
+            cleaned.append(r)
+        reflections = cleaned[:N_REFLECTIONS_PER_CYCLE]
 
         if not reflections:
+            print(f"  ⚠ {self.name} 反思输出为空或无效,跳过")
             return
 
         print(f"  💭 {self.name} 反思:")
@@ -315,12 +324,22 @@ async def generate_plan(agent: Agent, date_str: str) -> list[PlanItem]:
 
 # ============ conversation ============
 
-async def agent_speak(speaker: Agent, listener: Agent, scene: str) -> str:
+async def agent_speak(speaker: Agent, listener: Agent, scene: str,
+                      now: datetime) -> str:
     query = f"{scene} 和 {listener.name} 的对话"
     retrieved = speaker.retrieve_as_prompt(query, k=6)
 
+    # Build a time-anchor sentence so the LLM doesn't invent "下周" vs "下个月"
+    valentines = datetime(now.year, 2, 14)
+    days_to_vday = (valentines - now).days
+    if days_to_vday >= 0:
+        vday_hint = f"今天是 {now.date()},距情人节(02-14) 还有 {days_to_vday} 天。"
+    else:
+        vday_hint = f"今天是 {now.date()},情人节(02-14)已过 {-days_to_vday} 天。"
+
     prompt = f"""你是 {speaker.name}。
 【人格】{speaker.identity}
+【时间锚点】{vday_hint}
 
 【你检索到的相关记忆(💭 = 反思判断, · = 具体观察)】
 {retrieved}
@@ -328,7 +347,8 @@ async def agent_speak(speaker: Agent, listener: Agent, scene: str) -> str:
 【当前场景】{scene}
 你正在和 {listener.name} 说话。
 
-请用一句自然、符合人格的话回应(≤40字)。直接输出一句话,不要任何前缀、引号、叙事描写。"""
+请用一句自然、符合人格的话回应(≤40字)。如果提到日期/时间,必须基于上面【时间锚点】。
+直接输出一句话,不要任何前缀、引号、叙事描写、XML 标签。"""
     return await _llm_call(prompt, temperature=0.8)
 
 
@@ -336,7 +356,7 @@ async def short_conversation(a: Agent, b: Agent, scene: str, rounds: int,
                              now: datetime):
     speaker, listener = a, b
     for _ in range(rounds):
-        utt = await agent_speak(speaker, listener, scene)
+        utt = await agent_speak(speaker, listener, scene, now)
         print(f"     [{speaker.name}] {utt}")
 
         shared_score = await score_importance(f"对话内容: {utt}")
