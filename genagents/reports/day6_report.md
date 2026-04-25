@@ -1,8 +1,8 @@
 # Day 6 Simulation Report
 
-- **模拟窗口**: 2026-02-10 起 3 天
+- **模拟窗口**: 2026-02-10 起 1 天
 - **Agents**: Isabella, Maria, Klaus
-- **生成于**: 2026-04-23T18:17:04
+- **生成于**: 2026-04-25T23:21:06
 - **Seed 事件**: 2026-02-14 Isabella 在 Hobbs Cafe 办情人节 party
 
 ## 1. Seed 事件传播评估
@@ -11,76 +11,58 @@
 
 | Agent | 是否知道 | Level | 已知字段 | 理由 |
 |---|---|---|---|---|
-| Isabella | **yes** | L3 | organizer, date, venue, type | Isabella的记忆中明确显示她知道自己是组织者，且记得2026-02-14在Hobbs Cafe办情人节party的所有信息 |
-| Maria | **yes** | L3 | organizer, date, venue, type | Maria从Isabella的直接邀请中得知这是情人节派对(类型)，由Isabella组织(组织者)，后天举行(日期)，在她店里即Hobbs Cafe(地点)， |
-| Klaus | **yes** | L3 | organizer, date, venue, type | Klaus 明确提到 Isabella 在 Hobbs Cafe 举办情人节派对, 知道了组织者、日期、地点和类型。 |
+| Isabella | **yes** | L3 | organizer, date, venue, type | Isabella明确表示要在2026-02-14在Hobbs Cafe举办情人节派对，且自己是组织者。 |
+| Maria | **yes** | L2 | organizer, date, type | Isabella明确邀请Maria参加party，并提到再过三天就是情人节，因此Maria知道有party活动、组织者是Isabella、日期是情人节2026- |
+| Klaus | **yes** | L3 | organizer, date, venue, type | Klaus从Isabella的邀请和确认中得知了该情人节派对的时间、地点、组织者和类型 |
 
 **最终覆盖率**:
 - Paper-faithful (yes/no): **3/3 = 100%**
-- L3 完整信息 (知道 ≥3 个字段): **3/3 = 100%**
+- L3 完整信息 (知道 ≥3 个字段): **2/3 = 67%**
 
 ## 2. 关系矩阵
 
 每个 agent 对其他 agent 的**关注度**(总 importance)与 top-3 reflection 原文。
 
-### Isabella → Maria
-- **反思次数**: 28
-- **关注度** (Σ importance): 224.0
-- **平均重要性**: 8.00
-- **Top 3 reflection 原文**:
-  1. 我对常客的关系经营呈现分层策略——Klaus属于深度信任层，Maria尚待发展
-  2. 我对Maria的"想多聊聊"反映出我意识到当前关系深度不足但尚未找到破冰方式
-  3. Klaus愿意充当我和Maria之间的社交桥梁
+### Isabella → Maria  _(无相关反思)_
 
 ### Isabella → Klaus
-- **反思次数**: 36
-- **关注度** (Σ importance): 288.0
+- **反思次数**: 1
+- **关注度** (Σ importance): 8.0
 - **平均重要性**: 8.00
 - **Top 3 reflection 原文**:
-  1. 我对常客的关系经营呈现分层策略——Klaus属于深度信任层，Maria尚待发展
-  2. Klaus愿意充当我和Maria之间的社交桥梁
-  3. 我对Klaus的信任已演变为社交依赖，几乎将派对所有社交任务都寄托在他身上
+  1. Klaus 展现出老朋友特有的"不仅捧场还主动增值"的响应模式，这让我容易将宣传责任全盘托付
 
 ### Maria → Isabella
-- **反思次数**: 11
-- **关注度** (Σ importance): 88.0
+- **反思次数**: 1
+- **关注度** (Σ importance): 8.0
 - **平均重要性**: 8.00
 - **Top 3 reflection 原文**:
-  1. Isabella主动找Maria谈情人节派对的事，暗示Maria在社交中具有一定的吸引力或被关注度
-  2. Maria从学习编程到外出见Isabella的迅速行动，显示出她具备将想法立即付诸实践的执行力
-  3. Isabella在邀请中同时提及Maria和Klaus，暗示她可能有意促进他们的互动，Maria可据此在派对中更自然地与Klaus接触
+  1. Isabella对Maria的回应显示出Maria在社交关系中比她自以为的更有位置Isabella主动提供热饮、说"随时欢迎"说明Maria的边界被尊重且被持续邀请
 
-### Maria → Klaus
+### Maria → Klaus  _(无相关反思)_
+
+### Klaus → Isabella
 - **反思次数**: 4
 - **关注度** (Σ importance): 32.0
 - **平均重要性**: 8.00
 - **Top 3 reflection 原文**:
-  1. Isabella在邀请中同时提及Maria和Klaus，暗示她可能有意促进他们的互动，Maria可据此在派对中更自然地与Klaus接触
-  2. Maria对Isabella的派对邀请毫不犹疑直接答应，说明她对与Klaus共同参与社交活动持开放甚至期待的态度
-  3. Maria在社交中善于将被动回应转化为主动连接，她通过提及Klaus被Isabella邀请的事实来自然延续对话，展现出将社交资源串联的能力
-
-### Klaus → Isabella
-- **反思次数**: 19
-- **关注度** (Σ importance): 152.0
-- **平均重要性**: 8.00
-- **Top 3 reflection 原文**:
-  1. Isabella 主动邀请我参与她的重要节日活动，说明她把我视为可信赖的亲密友人
-  2. Isabella在关系中主动承担连接者角色，通过具体活动邀约和创造互动机会来推动关系发展
-  3. Isabella多次主动提及Maria并创造她们直接互动的机会，这表明她在有意识地将我推向更广泛的社交网络而非仅停留在舒适区
+  1. Isabella擅长用情感联结激活商业场景，情人节派对本质是她在利用朋友资源共创内容
+  2. Isabella与我多年朋友关系中隐藏着资源互换的商业逻辑，我需要重新审视这段关系的本质
+  3. Isabella对我的关系认知更偏向功能性价值（拍摄能力），而非纯粹的朋友情感连接
 
 ### Klaus → Maria
-- **反思次数**: 16
-- **关注度** (Σ importance): 128.0
+- **反思次数**: 3
+- **关注度** (Σ importance): 24.0
 - **平均重要性**: 8.00
 - **Top 3 reflection 原文**:
-  1. 我与 Maria 虽然常在同个空间出现，但缺乏深度互动，这反映出我在社交关系建立上的被动模式
-  2. Isabella多次主动提及Maria并创造她们直接互动的机会，这表明她在有意识地将我推向更广泛的社交网络而非仅停留在舒适区
-  3. 当我承诺"帮Maria沟通让她放松"时，实际上是在为自己制造与Maria对话的正当性，这反映出我内心渴望建立关系但需要外在理由来缓解社交焦虑
+  1. Maria作为陌生常客存在被忽视的社交节点，我若主动破局可能为未来关系发展创造新路径
+  2. 我的社交网络扩展意愿薄弱，即使面对Maria这样的潜在新社交节点，也缺乏主动探索的动机
+  3. 我对Maria的社交回避实际上源于对自我表达能力的不信任，而非真正缺乏兴趣
 
 ## 3. Memory stream 统计
 
 | Agent | 总 memory | observation | reflection |
 |---|---|---|---|
-| Isabella | 185 | 119 | 66 |
-| Maria | 151 | 100 | 51 |
-| Klaus | 171 | 114 | 57 |
+| Isabella | 44 | 29 | 15 |
+| Maria | 20 | 14 | 6 |
+| Klaus | 36 | 24 | 12 |
