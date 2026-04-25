@@ -60,6 +60,19 @@ NUM_DAYS = int(os.environ.get("NUM_DAYS", "3"))
 HOURS_START = int(os.environ.get("HOURS_START", "7"))
 HOURS_END = int(os.environ.get("HOURS_END", "22"))
 
+# Reproducibility — seeds the random pair-pick in conversation triggering and any
+# numpy randomness. LLM output itself is still nondeterministic.
+SEED = int(os.environ.get("SEED", "42"))
+random.seed(SEED)
+np.random.seed(SEED)
+
+# Token / cost tracking (populated inside _llm_call; reported at end of main).
+COST = {"calls": 0, "input_tokens": 0, "output_tokens": 0}
+# Approximate MiniMax-M2 pricing (¥ per 1k tokens). Verify against current
+# rate card before reporting numbers in the resume; this is a sanity estimate.
+INPUT_PRICE_PER_1K = 0.0012
+OUTPUT_PRICE_PER_1K = 0.0080
+
 # Conversation trigger
 CONVERSATION_PROBABILITY = 0.8   # when co-located, chance to chat this hour
 CONVERSATION_ROUNDS = 4          # rounds per triggered chat (shorter than Day 3)
@@ -100,6 +113,12 @@ async def _llm_call(prompt: str, temperature: float = 0.8) -> str:
                 messages=[{"role": "user", "content": prompt}],
                 temperature=temperature,
             )
+            # Count tokens for cost report; usage is best-effort (server may omit)
+            COST["calls"] += 1
+            usage = getattr(resp, "usage", None)
+            if usage is not None:
+                COST["input_tokens"] += getattr(usage, "prompt_tokens", 0) or 0
+                COST["output_tokens"] += getattr(usage, "completion_tokens", 0) or 0
             return strip_thinking(resp.choices[0].message.content)
         except APIError as e:
             if attempt == 4:
@@ -821,6 +840,15 @@ async def main():
     l3_count = sum(1 for r in prop_results.values() if r["level"] >= 3)
     print(f"\n覆盖率 (paper-faithful): {yes_count}/{len(agents)} = {yes_count/len(agents)*100:.0f}%")
     print(f"覆盖率 (L3 完整):        {l3_count}/{len(agents)} = {l3_count/len(agents)*100:.0f}%")
+
+    # Cost / reproducibility report
+    cost = (COST["input_tokens"] * INPUT_PRICE_PER_1K
+            + COST["output_tokens"] * OUTPUT_PRICE_PER_1K) / 1000
+    print(f"\n📊 SEED={SEED}, MODEL={MODEL}")
+    print(f"   API: {COST['calls']} calls, "
+          f"{COST['input_tokens']:,} input + {COST['output_tokens']:,} output tokens")
+    print(f"💰 估算成本: ≈ ¥{cost:.2f} "
+          f"(MiniMax-M2 价格 ¥{INPUT_PRICE_PER_1K}/1k input + ¥{OUTPUT_PRICE_PER_1K}/1k output)")
 
 
 if __name__ == "__main__":
