@@ -1,8 +1,8 @@
 # Day 6 Simulation Report
 
-- **模拟窗口**: 2026-02-10 起 1 天
+- **模拟窗口**: 2026-02-10 起 3 天
 - **Agents**: Isabella, Maria, Klaus
-- **生成于**: 2026-04-23T16:48:16
+- **生成于**: 2026-04-23T18:17:04
 - **Seed 事件**: 2026-02-14 Isabella 在 Hobbs Cafe 办情人节 party
 
 ## 1. Seed 事件传播评估
@@ -11,69 +11,76 @@
 
 | Agent | 是否知道 | Level | 已知字段 | 理由 |
 |---|---|---|---|---|
-| Isabella | **yes** | L3 | organizer, date, venue, type | 记忆明确显示 Isabella 本人计划在2026-02-14于Hobbs Cafe举办情人节派对 |
-| Maria | **yes** | L2 | organizer, type | Maria从Isabella的邀请中知道是情人节派对且由Isabella组织，但不知道具体日期2026-02-14和地点Hobbs Cafe |
-| Klaus | **yes** | L3 | organizer, date, venue, type | Klaus知道Isabella是组织者，从'14号等你来拍浪漫片'知道日期，从'Hobbes Cafe的老板�'知道地点，从'情人节party'和'浪漫片'推断 |
+| Isabella | **yes** | L3 | organizer, date, venue, type | Isabella的记忆中明确显示她知道自己是组织者，且记得2026-02-14在Hobbs Cafe办情人节party的所有信息 |
+| Maria | **yes** | L3 | organizer, date, venue, type | Maria从Isabella的直接邀请中得知这是情人节派对(类型)，由Isabella组织(组织者)，后天举行(日期)，在她店里即Hobbs Cafe(地点)， |
+| Klaus | **yes** | L3 | organizer, date, venue, type | Klaus 明确提到 Isabella 在 Hobbs Cafe 举办情人节派对, 知道了组织者、日期、地点和类型。 |
 
 **最终覆盖率**:
 - Paper-faithful (yes/no): **3/3 = 100%**
-- L3 完整信息 (知道 ≥3 个字段): **2/3 = 67%**
+- L3 完整信息 (知道 ≥3 个字段): **3/3 = 100%**
 
 ## 2. 关系矩阵
 
 每个 agent 对其他 agent 的**关注度**(总 importance)与 top-3 reflection 原文。
 
 ### Isabella → Maria
-- **反思次数**: 3
-- **关注度** (Σ importance): 24.0
+- **反思次数**: 28
+- **关注度** (Σ importance): 224.0
 - **平均重要性**: 8.00
 - **Top 3 reflection 原文**:
-  1. Maria 偏好安静独处，热闹的情人节派对可能与她来 Cafe 的核心动机相冲
-  2. 与 Maria 的关系需要我先提供价值（安静陪伴而非社交压力）才能推进到朋友层级
-  3. Maria 在被邀请时未明确回应可能意味着她正在权衡派对与个人需求的冲突,沉默不等于拒绝
+  1. 我对常客的关系经营呈现分层策略——Klaus属于深度信任层，Maria尚待发展
+  2. 我对Maria的"想多聊聊"反映出我意识到当前关系深度不足但尚未找到破冰方式
+  3. Klaus愿意充当我和Maria之间的社交桥梁
 
 ### Isabella → Klaus
-- **反思次数**: 6
-- **关注度** (Σ importance): 48.0
+- **反思次数**: 36
+- **关注度** (Σ importance): 288.0
 - **平均重要性**: 8.00
 - **Top 3 reflection 原文**:
-  1. Klaus 作为十年老友，是我测试新想法（如派对邀请）的安全试验对象
-  2. Klaus 的行动力说明他已超越常客身份，转变为可协作的伙伴关系
-  3. 我过度依赖外部合作伙伴（如Klaus的拍摄）来推动项目进展，掩盖了我自身对派对核心目标定位的模糊
+  1. 我对常客的关系经营呈现分层策略——Klaus属于深度信任层，Maria尚待发展
+  2. Klaus愿意充当我和Maria之间的社交桥梁
+  3. 我对Klaus的信任已演变为社交依赖，几乎将派对所有社交任务都寄托在他身上
 
-### Maria → Isabella  _(无相关反思)_
+### Maria → Isabella
+- **反思次数**: 11
+- **关注度** (Σ importance): 88.0
+- **平均重要性**: 8.00
+- **Top 3 reflection 原文**:
+  1. Isabella主动找Maria谈情人节派对的事，暗示Maria在社交中具有一定的吸引力或被关注度
+  2. Maria从学习编程到外出见Isabella的迅速行动，显示出她具备将想法立即付诸实践的执行力
+  3. Isabella在邀请中同时提及Maria和Klaus，暗示她可能有意促进他们的互动，Maria可据此在派对中更自然地与Klaus接触
 
 ### Maria → Klaus
 - **反思次数**: 4
 - **关注度** (Σ importance): 32.0
 - **平均重要性**: 8.00
 - **Top 3 reflection 原文**:
-  1. Maria对Klaus的主动搭话显示她对这段关系仍保有潜在期待
-  2. Klaus暗示的"聊聊拍摄想法"可能是推动关系发展的关键窗口
-  3. Maria主动给Klaus留座说明她在安全熟悉的框架下具备社交主动性
+  1. Isabella在邀请中同时提及Maria和Klaus，暗示她可能有意促进他们的互动，Maria可据此在派对中更自然地与Klaus接触
+  2. Maria对Isabella的派对邀请毫不犹疑直接答应，说明她对与Klaus共同参与社交活动持开放甚至期待的态度
+  3. Maria在社交中善于将被动回应转化为主动连接，她通过提及Klaus被Isabella邀请的事实来自然延续对话，展现出将社交资源串联的能力
 
 ### Klaus → Isabella
-- **反思次数**: 10
-- **关注度** (Σ importance): 80.0
+- **反思次数**: 19
+- **关注度** (Σ importance): 152.0
 - **平均重要性**: 8.00
 - **Top 3 reflection 原文**:
-  1. Isabella十多年的信任使她能自然地向我求助创意工作
-  2. Maria作为旁观者可能观察到我与Isabella的互动模式
-  3. Isabella对节日营销有强烈事业心，会主动寻求外部创意资源来提升节点价值
+  1. Isabella 主动邀请我参与她的重要节日活动，说明她把我视为可信赖的亲密友人
+  2. Isabella在关系中主动承担连接者角色，通过具体活动邀约和创造互动机会来推动关系发展
+  3. Isabella多次主动提及Maria并创造她们直接互动的机会，这表明她在有意识地将我推向更广泛的社交网络而非仅停留在舒适区
 
 ### Klaus → Maria
-- **反思次数**: 4
-- **关注度** (Σ importance): 32.0
+- **反思次数**: 16
+- **关注度** (Σ importance): 128.0
 - **平均重要性**: 8.00
 - **Top 3 reflection 原文**:
-  1. Maria作为旁观者可能观察到我与Isabella的互动模式
-  2. Maria作为旁观者观察到我与Isabella的互动模式时保持了距离，她的回应更多是礼貌性参与而非主动融入，显示出她对第三方创意合作的旁观者姿态
-  3. Maria对我与Isabella的互动保持观察者距离，但已知悉我正在为Isabella提供情人节创意协助
+  1. 我与 Maria 虽然常在同个空间出现，但缺乏深度互动，这反映出我在社交关系建立上的被动模式
+  2. Isabella多次主动提及Maria并创造她们直接互动的机会，这表明她在有意识地将我推向更广泛的社交网络而非仅停留在舒适区
+  3. 当我承诺"帮Maria沟通让她放松"时，实际上是在为自己制造与Maria对话的正当性，这反映出我内心渴望建立关系但需要外在理由来缓解社交焦虑
 
 ## 3. Memory stream 统计
 
 | Agent | 总 memory | observation | reflection |
 |---|---|---|---|
-| Isabella | 44 | 29 | 15 |
-| Maria | 42 | 30 | 12 |
-| Klaus | 58 | 40 | 18 |
+| Isabella | 185 | 119 | 66 |
+| Maria | 151 | 100 | 51 |
+| Klaus | 171 | 114 | 57 |
