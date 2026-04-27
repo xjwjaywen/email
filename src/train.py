@@ -135,7 +135,7 @@ def main():
         model=model,
         train_dataset=dataset,
         args=sft_config,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,    # 新版 TRL: tokenizer 参数改名 processing_class
     )
 
     # ─── 5. 关键: loss 只算 assistant 部分 ───────────────────────────────
