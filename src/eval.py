@@ -2,29 +2,26 @@
 eval.py — 在 MATH 测试集上评测模型
 
 干啥的:
-    加载模型 (base 或 base + LoRA), 让它解 MATH test 题目, 从输出中
-    提取 \\boxed{...} 里的最终答案, 和 ground truth 比对算准确率.
-    完全程序化判分, 不需要任何外部 API.
-
-输入:  --lora 路径 (可选, 不给就跑 baseline 不带 LoRA)
-输出:  控制台打印准确率 + outputs/eval_results.json (每题对错记录)
-
-什么时候跑:
-    Week 1 Day 5-7:  python -m src.eval                      → baseline ~50%
-    Week 2 Day 6-7:  python -m src.eval --lora outputs/v01_sft → SFT 后, 应该 > baseline
-
-依赖:
-    pip install torch unsloth peft datasets sympy
+    加载 base 模型 (可选 + LoRA), 让它解 MATH test 题, 从输出抠出 \\boxed{X},
+    和 ground truth 的 \\boxed{X} 比对算准确率. 完全程序化判分, 不要 API.
 
 跑法 (避开别人占用的 GPU):
-    CUDA_VISIBLE_DEVICES=2 python -m src.eval --num_problems 100
-    CUDA_VISIBLE_DEVICES=2 python -m src.eval --num_problems 100 --lora outputs/v01_sft
+    CUDA_VISIBLE_DEVICES=3 python -m src.eval --num_problems 100
+    CUDA_VISIBLE_DEVICES=3 python -m src.eval --num_problems 100 --lora outputs/v01_sft
+
+baseline 期望 ~50% (Qwen2.5-7B-Instruct 公开数字).
+100 题大约 30-60 分钟 (取决于解答长度).
 """
 
 import argparse
 import json
 import re
 from pathlib import Path
+
+import torch
+from datasets import load_dataset
+from tqdm import tqdm
+from unsloth import FastLanguageModel
 
 
 SYSTEM_PROMPT = (
@@ -34,84 +31,133 @@ SYSTEM_PROMPT = (
 
 
 def extract_boxed_answer(text: str) -> str | None:
-    """从模型输出里抠出 \\boxed{X} 中的 X.
-    MATH 数据集的 ground truth solution 也是这种格式, 所以两边都用这个函数抠."""
-    # 简单实现: 找最后一个 \boxed{...} (模型可能有多个 box, 取最后那个最终答案)
-    # 注意 LaTeX 嵌套花括号问题, 这个简单版本对大部分情况够用
-    matches = re.findall(r"\\boxed\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}", text)
+    """从一段文字里抠出最后一个 \\boxed{X} 中的 X.
+
+    简单实现, 只处理一层嵌套花括号 (\\boxed{a^{b}} 这种). 对于更复杂的
+    \\boxed{\\frac{1}{\\sqrt{2}}} 也能处理因为正则递归一层. v0.2 升级
+    sympy 等价判断时这个函数也要换成更鲁棒的版本.
+    """
+    # 匹配 \boxed{...}, 内部允许一层嵌套花括号
+    pattern = r"\\boxed\{((?:[^{}]|\{[^{}]*\})*)\}"
+    matches = re.findall(pattern, text)
     return matches[-1].strip() if matches else None
 
 
-def is_equivalent(pred: str, gold: str) -> bool:
-    """判断两个答案是否等价. v0.1 用最简单的字符串比对 (去空格 + 大小写).
-    v0.2 升级到 sympy 表达式等价判断 (能识别 1/2 == 0.5 == 2^{-1} 这种)."""
+def is_equivalent(pred: str | None, gold: str | None) -> bool:
+    """判断两个答案是否等价. v0.1 用最简字符串比对(去空格 + 大小写).
+
+    后期 v0.2 升级:
+        from sympy.parsing.latex import parse_latex
+        return sympy.simplify(parse_latex(pred) - parse_latex(gold)) == 0
+    这能识别 1/2 == 0.5 == 2^{-1} 这种数学等价.
+    """
     if pred is None or gold is None:
         return False
     return pred.replace(" ", "").lower() == gold.replace(" ", "").lower()
-    # TODO v0.2: 用 sympy.simplify(parse_latex(pred) - parse_latex(gold)) == 0
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--lora", type=Path, default=None,
-                        help="LoRA 文件夹路径, 不给就跑 base 模型 baseline")
+                        help="LoRA 文件夹, 不给就跑 base 模型 baseline")
     parser.add_argument("--num_problems", type=int, default=100,
-                        help="评测多少题, 100 题大约 30-60 分钟, 全量 5000 题需要数小时")
+                        help="评测多少题, 100 题 ~30-60 分钟, 全量 5000 题数小时")
     parser.add_argument("--model", default="unsloth/Qwen2.5-7B-Instruct",
                         help="base 模型")
     parser.add_argument("--out", type=Path, default=Path("outputs/eval_results.json"),
                         help="评测结果保存路径")
     parser.add_argument("--max_new_tokens", type=int, default=1024,
                         help="模型生成最长长度, MATH 解答可以很长")
-    parser.add_argument("--temperature", type=float, default=0.0,
-                        help="0.0 = 贪心解码, 评测时一般用 0 保证可复现")
+    parser.add_argument("--dataset", default="lighteval/MATH")
     args = parser.parse_args()
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
 
-    # TODO Week 1 Day 5-7:
-    #   1. from unsloth import FastLanguageModel
-    #      model, tokenizer = FastLanguageModel.from_pretrained(
-    #          args.model, max_seq_length=4096, load_in_4bit=True)
-    #      FastLanguageModel.for_inference(model)  # 推理模式
-    #   2. if args.lora:
-    #          model.load_adapter(str(args.lora))
-    #   3. from datasets import load_dataset
-    #      ds = load_dataset("hendrycks/competition_math", split="test")
-    #      ds = ds.select(range(args.num_problems))
-    #   4. results = []
-    #      correct = 0
-    #      for ex in tqdm(ds):
-    #          prompt = tokenizer.apply_chat_template([
-    #              {"role": "system", "content": SYSTEM_PROMPT},
-    #              {"role": "user", "content": ex["problem"]},
-    #          ], tokenize=False, add_generation_prompt=True)
-    #          # 生成
-    #          inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
-    #          out = model.generate(**inputs, max_new_tokens=args.max_new_tokens,
-    #                               do_sample=False)
-    #          response = tokenizer.decode(out[0][inputs.input_ids.shape[1]:],
-    #                                      skip_special_tokens=True)
-    #          pred = extract_boxed_answer(response)
-    #          gold = extract_boxed_answer(ex["solution"])
-    #          ok = is_equivalent(pred, gold)
-    #          correct += int(ok)
-    #          results.append({
-    #              "problem": ex["problem"][:200],
-    #              "pred": pred, "gold": gold, "correct": ok,
-    #          })
-    #   5. accuracy = correct / len(ds)
-    #      with open(args.out, "w") as f:
-    #          json.dump({"setup": "baseline" if not args.lora else f"lora:{args.lora}",
-    #                     "accuracy": accuracy, "n": len(ds), "details": results}, f, indent=2)
-    #      print(f"\\n✅ Accuracy: {accuracy:.1%} ({correct}/{len(ds)})")
+    # ─── 1. 加载模型 ─────────────────────────────────────────────────────
+    print(f"加载 {args.model}...")
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        args.model,
+        max_seq_length=4096,           # 评测要长一点 (题 + 解答)
+        load_in_4bit=True,
+        device_map={"": 0},            # 强制全放第 0 张可见 GPU
+    )
 
-    setup = "baseline (no LoRA)" if args.lora is None else f"with LoRA from {args.lora}"
-    print(f"[骨架] 在 MATH test 上跑 {args.num_problems} 题")
-    print(f"[骨架]   模型:    {args.model}")
-    print(f"[骨架]   配置:    {setup}")
-    print(f"[骨架]   保存到:  {args.out}")
-    print("[骨架] Week 1 Day 5-7 实现具体逻辑")
+    if args.lora:
+        print(f"加载 LoRA: {args.lora}")
+        model.load_adapter(str(args.lora))
+
+    # 切到推理模式 (Unsloth 会做一些优化)
+    FastLanguageModel.for_inference(model)
+
+    # ─── 2. 加载数据 ─────────────────────────────────────────────────────
+    print(f"加载 {args.dataset} test 前 {args.num_problems} 题...")
+    ds = load_dataset(args.dataset, split="test")
+    ds = ds.select(range(min(args.num_problems, len(ds))))
+
+    # ─── 3. 推理 + 判分循环 ──────────────────────────────────────────────
+    results = []
+    correct = 0
+    for ex in tqdm(ds, desc="评测中"):
+        prompt = tokenizer.apply_chat_template(
+            [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user",   "content": ex["problem"]},
+            ],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+
+        inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
+        with torch.no_grad():
+            out = model.generate(
+                **inputs,
+                max_new_tokens=args.max_new_tokens,
+                do_sample=False,                # 贪心解码, 评测要可复现
+                pad_token_id=tokenizer.pad_token_id,
+            )
+        # 只解码新生成的部分, 不要 prompt
+        response = tokenizer.decode(
+            out[0][inputs.input_ids.shape[1]:],
+            skip_special_tokens=True,
+        )
+
+        pred = extract_boxed_answer(response)
+        gold = extract_boxed_answer(ex["solution"])
+        ok = is_equivalent(pred, gold)
+        correct += int(ok)
+
+        results.append({
+            "problem":  ex["problem"][:300],   # 截断省空间
+            "level":    ex.get("level", ""),
+            "type":     ex.get("type", ""),
+            "pred":     pred,
+            "gold":     gold,
+            "correct":  ok,
+            # 可选: 把完整 response 也存下来调试用
+            "response": response[:500],
+        })
+
+    # ─── 4. 统计 + 保存 ──────────────────────────────────────────────────
+    accuracy = correct / len(ds)
+
+    setup = "baseline (no LoRA)" if args.lora is None else f"with LoRA: {args.lora}"
+    payload = {
+        "setup":      setup,
+        "model":      args.model,
+        "n":          len(ds),
+        "correct":    correct,
+        "accuracy":   accuracy,
+        "details":    results,
+    }
+    with open(args.out, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+
+    print()
+    print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"  Accuracy: {accuracy:.1%}  ({correct}/{len(ds)})")
+    print(f"  Setup:    {setup}")
+    print(f"  保存到:    {args.out}")
+    print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 
 if __name__ == "__main__":
