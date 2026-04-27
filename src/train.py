@@ -137,11 +137,17 @@ def main():
         dataset_text_field="text",         # 用 dataset 里的 'text' 列做训练
         report_to="none",                  # 不上传 wandb (要的话改 "wandb")
         seed=42,
-        eos_token=explicit_eos,            # 显式传 Qwen 的真实 EOS (<|im_end|>),
-                                           # 新版 TRL (>=0.16) 默认值是占位符会报错
         # 注: max_seq_length 已在 FastLanguageModel.from_pretrained 时设置,
         # 新版 TRL (>=0.14) 的 SFTConfig 里移除了这个参数, 别重复设
+        # 注: eos_token 不通过 kwarg 传 (TRL 某些版本 __post_init__ 会重置成占位符),
+        # 改在下面构造完后直接赋值, 同时打印 verify
     )
+
+    # 强制覆盖 eos_token (kwarg 路径不可靠时这条万能)
+    sft_config.eos_token = explicit_eos
+    print(f"  SFTConfig.eos_token (after override) = {sft_config.eos_token!r}")
+    if sft_config.eos_token == "<EOS_TOKEN>":
+        raise RuntimeError("eos_token 覆盖失败, 看上面的 token 诊断 + 检查 TRL 版本")
 
     trainer = SFTTrainer(
         model=model,
