@@ -100,6 +100,16 @@ def main():
     print(f"  数据集大小: {len(dataset)}")
     print(f"  示例 (前 300 字符):\n{dataset[0]['text'][:300]}...\n")
 
+    # ─── 调试 + 防御: 确保 tokenizer 有正确的 eos_token ─────────────────
+    # Unsloth 的 4-bit Qwen 包装有时 eos_token 为 None, 直接传给 SFTConfig
+    # 会被替换成占位符 <EOS_TOKEN> 然后报错. Qwen2.5 的 chat-EOS 永远是 <|im_end|>.
+    QWEN_EOS = "<|im_end|>"
+    print(f"  tokenizer.eos_token (loaded) = {tokenizer.eos_token!r}")
+    if tokenizer.eos_token is None or tokenizer.eos_token == "<EOS_TOKEN>":
+        tokenizer.eos_token = QWEN_EOS
+        print(f"  → 修复: tokenizer.eos_token 设为 {QWEN_EOS!r}")
+    explicit_eos = tokenizer.eos_token   # 一定是非 None 字符串了
+
     # ─── 4. 训练配置 ─────────────────────────────────────────────────────
     eff_batch = args.batch_size * args.grad_accum
     total_steps = (len(dataset) * args.epochs) // eff_batch
@@ -127,7 +137,7 @@ def main():
         dataset_text_field="text",         # 用 dataset 里的 'text' 列做训练
         report_to="none",                  # 不上传 wandb (要的话改 "wandb")
         seed=42,
-        eos_token=tokenizer.eos_token,     # 显式传 Qwen 的真实 EOS (<|im_end|>),
+        eos_token=explicit_eos,            # 显式传 Qwen 的真实 EOS (<|im_end|>),
                                            # 新版 TRL (>=0.16) 默认值是占位符会报错
         # 注: max_seq_length 已在 FastLanguageModel.from_pretrained 时设置,
         # 新版 TRL (>=0.14) 的 SFTConfig 里移除了这个参数, 别重复设
