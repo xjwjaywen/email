@@ -124,10 +124,11 @@ def main():
         save_steps=args.save_steps,
         save_strategy="steps",
         save_total_limit=2,                # 只保留最近 2 个 checkpoint, 省磁盘
-        max_seq_length=args.max_seq_length,
-        dataset_text_field="text",
+        dataset_text_field="text",         # 用 dataset 里的 'text' 列做训练
         report_to="none",                  # 不上传 wandb (要的话改 "wandb")
         seed=42,
+        # 注: max_seq_length 已在 FastLanguageModel.from_pretrained 时设置,
+        # 新版 TRL (>=0.14) 的 SFTConfig 里移除了这个参数, 别重复设
     )
 
     trainer = SFTTrainer(
