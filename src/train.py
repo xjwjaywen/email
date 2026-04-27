@@ -127,6 +127,8 @@ def main():
         dataset_text_field="text",         # 用 dataset 里的 'text' 列做训练
         report_to="none",                  # 不上传 wandb (要的话改 "wandb")
         seed=42,
+        eos_token=tokenizer.eos_token,     # 显式传 Qwen 的真实 EOS (<|im_end|>),
+                                           # 新版 TRL (>=0.16) 默认值是占位符会报错
         # 注: max_seq_length 已在 FastLanguageModel.from_pretrained 时设置,
         # 新版 TRL (>=0.14) 的 SFTConfig 里移除了这个参数, 别重复设
     )
