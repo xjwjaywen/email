@@ -55,6 +55,14 @@ REFLECTION_THRESHOLD = 30.0
 N_REFLECTIONS_PER_CYCLE = 3
 REFLECTION_IMPORTANCE = 8.0
 
+# Three-factor retrieval (paper §4.3). Weighted sum; defaults match the paper's
+# equal-weight baseline. Decay base is per-minute — paper uses 0.995^minutes;
+# the prior 0.99^hours barely decayed across multi-day runs.
+ALPHA_RECENCY = 1.0
+BETA_RELEVANCE = 1.0
+GAMMA_IMPORTANCE = 1.0
+RECENCY_DECAY = 0.995
+
 # Multi-day simulation config (env-overridable)
 NUM_DAYS = int(os.environ.get("NUM_DAYS", "3"))
 HOURS_START = int(os.environ.get("HOURS_START", "7"))
@@ -274,7 +282,11 @@ class Agent:
         if context_note:
             prompt = context_note + "\n\n" + prompt
 
-        raw = await _llm_call(prompt, temperature=0.3)
+        try:
+            raw = await _llm_call(prompt, temperature=0.3)
+        except APIError:
+            print(f"  ⚠ {self.name} reflection LLM call failed, skipping this cycle")
+            return
         reflections = re.findall(r"\d+[\.\)]\s*(.+)", raw)
         cleaned = []
         for r in reflections:
@@ -311,11 +323,13 @@ class Agent:
         t_now = now or datetime.now()
 
         def score(m: MemoryItem) -> float:
-            hours_ago = (t_now - m.timestamp).total_seconds() / 3600 + 1e-3
-            recency = 0.99 ** hours_ago
+            minutes_ago = (t_now - m.timestamp).total_seconds() / 60 + 1e-3
+            recency = RECENCY_DECAY ** minutes_ago
             relevance = cosine(m.embedding, q_emb)
             importance = m.importance / 10.0
-            return recency + relevance + importance
+            return (ALPHA_RECENCY * recency
+                    + BETA_RELEVANCE * relevance
+                    + GAMMA_IMPORTANCE * importance)
 
         return sorted(self.memories, key=score, reverse=True)[:k]
 
@@ -435,7 +449,11 @@ async def agent_speak(speaker: Agent, listener: Agent, scene: str,
 
 请用一句自然、符合人格的话回应(≤40字)。如果提到日期/时间,必须基于上面【时间锚点】。
 直接输出一句话,不要任何前缀、引号、叙事描写、XML 标签。"""
-    return await _llm_call(prompt, temperature=0.8)
+    try:
+        return await _llm_call(prompt, temperature=0.8)
+    except APIError:
+        print(f"  ⚠ {speaker.name} speak LLM call failed, skipping turn")
+        return ""
 
 
 async def short_conversation(a: Agent, b: Agent, scene: str, rounds: int,
@@ -445,6 +463,10 @@ async def short_conversation(a: Agent, b: Agent, scene: str, rounds: int,
     for _ in range(rounds):
         utt = await agent_speak(speaker, listener, scene, now,
                                 dialogue_so_far=dialogue_so_far)
+        if not utt:
+            # API failed for this turn — abandon the rest of this conversation
+            # rather than letting empty utterances pollute downstream memory.
+            break
         print(f"     [{speaker.name}] {utt}")
 
         # record in THIS conversation's running transcript
