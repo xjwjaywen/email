@@ -16,3 +16,5 @@ models/
 *.bin
 *.safetensors
 wandb/
+!outputs/eval_*.json
+unsloth_compiled_cache/
