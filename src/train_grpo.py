@@ -85,11 +85,16 @@ def main():
                         help="base 模型 (Unsloth 4-bit)")
     parser.add_argument("--max_samples", type=int, default=1000,
                         help="只用 N 道题 (GRPO 慢, 1000 题 ~4-8 小时)")
+    parser.add_argument("--filter_levels", default="Level 3,Level 4",
+                        help="只训这些难度 (逗号分隔). 太简单 = 8/8 全对无信号; "
+                             "太难 = 8/8 全错无信号. 中等难度学习效率最高. "
+                             "传 '' 关闭过滤 (用全部难度)")
     parser.add_argument("--max_seq_length", type=int, default=2048)
     parser.add_argument("--max_prompt_length", type=int, default=512,
                         help="prompt 最长 token 数, MATH 题目一般 <300")
-    parser.add_argument("--max_completion_length", type=int, default=1024,
-                        help="生成最长 token, 数学解答可能很长")
+    parser.add_argument("--max_completion_length", type=int, default=1536,
+                        help="生成最长 token, 数学解答可能很长. 1024 在冒烟测试中"
+                             "对部分难题会截断, 1536 给硬题足够推理空间")
     parser.add_argument("--num_generations", type=int, default=8,
                         help="每道题生成几个候选 (R1 默认 8)")
     parser.add_argument("--lora_r", type=int, default=16)
@@ -147,9 +152,18 @@ def main():
     # ─── 3. 加载数据 — GRPO 只要 prompt + gold, 不要 solution ─────────────
     print(f"━━━ 加载 MATH 训练集 ━━━")
     ds = load_dataset("qwedsacf/competition_math", split="train")
+    print(f"  全集大小: {len(ds)}")
+
+    # 难度过滤: GRPO 在 8/8 全对或 8/8 全错的批次上无信号 (废算力).
+    # 只留中等难度可以让 ~每个 batch 都有学习信号.
+    if args.filter_levels:
+        wanted = set(s.strip() for s in args.filter_levels.split(","))
+        ds = ds.filter(lambda ex: ex.get("level", "") in wanted)
+        print(f"  按难度过滤 ({wanted}): {len(ds)}")
+
     if args.max_samples:
         ds = ds.select(range(min(args.max_samples, len(ds))))
-    print(f"  原始样本: {len(ds)}")
+    print(f"  截取后: {len(ds)}")
 
     def format_example(ex):
         # 拼 prompt (包含 system + user, 末尾 assistant 引导符)
