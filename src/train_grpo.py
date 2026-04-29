@@ -85,9 +85,10 @@ def main():
                         help="base 模型 (Unsloth 4-bit)")
     parser.add_argument("--max_samples", type=int, default=1000,
                         help="只用 N 道题 (GRPO 慢, 1000 题 ~4-8 小时)")
-    parser.add_argument("--filter_levels", default="Level 3,Level 4",
+    parser.add_argument("--filter_levels", default="Level 4,Level 5",
                         help="只训这些难度 (逗号分隔). 太简单 = 8/8 全对无信号; "
-                             "太难 = 8/8 全错无信号. 中等难度学习效率最高. "
+                             "太难 = 8/8 全错无信号. Qwen2.5-7B 在 Level 3 上 "
+                             "已经会做大部分, 必须用 Level 4-5 才有学习信号. "
                              "传 '' 关闭过滤 (用全部难度)")
     parser.add_argument("--max_seq_length", type=int, default=2048)
     parser.add_argument("--max_prompt_length", type=int, default=512,
